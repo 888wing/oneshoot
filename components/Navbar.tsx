@@ -1,14 +1,40 @@
 
 import React from 'react';
-import { ViewMode } from '../types';
+import { ViewMode, User } from '../types';
 import { Button } from './Button';
+import { auth, googleProvider } from '../firebase';
+import { signInWithPopup, signOut } from 'firebase/auth';
+import { syncUserProfile } from '../services/dbService';
 
 interface NavbarProps {
   currentView: ViewMode;
   onNavigate: (view: ViewMode) => void;
+  currentUser: User | null;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate }) => {
+export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate, currentUser }) => {
+
+  const handleLogin = async () => {
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const user = result.user;
+      // Sync with our database
+      await syncUserProfile({
+        id: user.uid,
+        name: user.displayName || 'Anonymous',
+        avatar: user.photoURL || 'https://picsum.photos/100',
+        bio: 'New Member'
+      });
+    } catch (error) {
+      console.error("Login failed", error);
+    }
+  };
+
+  const handleLogout = () => {
+    signOut(auth);
+    onNavigate(ViewMode.BROWSE);
+  };
+
   return (
     <nav className="sticky top-0 z-50 border-b border-slate-800 bg-dark-950/80 backdrop-blur-md">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -35,24 +61,43 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView, onNavigate }) => {
             >
               Explore
             </Button>
+            
             <Button 
               variant="primary" 
-              onClick={() => onNavigate(ViewMode.UPLOAD)}
+              onClick={() => {
+                if (!currentUser) {
+                  handleLogin();
+                } else {
+                  onNavigate(ViewMode.UPLOAD);
+                }
+              }}
               icon={
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
                   <path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
                 </svg>
               }
             >
-              Upload Prototype
+              Upload
             </Button>
-            <div 
-              className="h-8 w-8 rounded-full bg-slate-700 overflow-hidden border border-slate-600 cursor-pointer hover:border-brand-500 transition-colors"
-              onClick={() => onNavigate(ViewMode.PROFILE)}
-              title="My Profile"
-            >
-               <img src="https://picsum.photos/seed/me/100/100" alt="User" className="h-full w-full object-cover" />
-            </div>
+
+            {currentUser ? (
+              <div className="flex items-center gap-3">
+                <div 
+                  className="h-8 w-8 rounded-full bg-slate-700 overflow-hidden border border-slate-600 cursor-pointer hover:border-brand-500 transition-colors"
+                  onClick={() => onNavigate(ViewMode.PROFILE)}
+                  title="My Profile"
+                >
+                  <img src={currentUser.avatar} alt="User" className="h-full w-full object-cover" />
+                </div>
+                <Button variant="ghost" size="sm" onClick={handleLogout}>
+                  Logout
+                </Button>
+              </div>
+            ) : (
+              <Button variant="secondary" onClick={handleLogin} id="global-signin-btn">
+                Sign In
+              </Button>
+            )}
           </div>
         </div>
       </div>
